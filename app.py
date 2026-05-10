@@ -2,8 +2,6 @@ import streamlit as st
 import requests
 import xml.etree.ElementTree as ET
 import pandas as pd
-import matplotlib.pyplot as plt
-from io import BytesIO
 from datetime import datetime
 
 st.set_page_config(page_title="AI FINANCIAL INTELLIGENCE SYSTEM", layout="wide")
@@ -51,22 +49,20 @@ news_df = pd.DataFrame(all_news)
 st.subheader("📊 关键市场指标")
 
 # ---- FRED API 设置 ----
-FRED_API_KEY = "2bac9607b4b2e991e610838fae24637c"
+FRED_API_KEY = "你的FRED_API_KEY"
 
 def get_fred_latest(series_id):
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json&sort_order=desc&limit=30"
     resp = requests.get(url)
     data = resp.json()
-    # 返回最新值和日期
     value = float(data["observations"][0]["value"])
     date = data["observations"][0]["date"]
-    # 历史数据用于趋势图
     history = [(obs["date"], float(obs["value"])) for obs in data["observations"] if obs["value"] != '.']
-    history.reverse()  # 日期正序
+    history.reverse()
     return date, value, history
 
 # ---- Alpha Vantage API 设置 ----
-ALPHA_KEY = "9KHASSZJY063QAT8"
+ALPHA_KEY = "你的ALPHA_KEY"
 
 def get_alpha_currency(symbol="USDCNY"):
     url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=CNY&apikey={ALPHA_KEY}"
@@ -75,7 +71,6 @@ def get_alpha_currency(symbol="USDCNY"):
     return rate
 
 def get_alpha_commodity(symbol="GC=F"):
-    # 黄金或原油，使用 TIME_SERIES_DAILY
     url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_KEY}"
     resp = requests.get(url).json()
     ts = resp.get("Time Series (Daily)", {})
@@ -128,24 +123,16 @@ with col2:
     st.dataframe(indicator_df)
 
 # ======================
-# 4️⃣ 趋势图展示
+# 4️⃣ 趋势图（使用 Streamlit 内置绘图）
 # ======================
 st.subheader("📈 指标趋势图")
 
 def plot_trend(history, title):
     df = pd.DataFrame(history, columns=["Date", "Value"])
     df["Date"] = pd.to_datetime(df["Date"])
-    plt.figure(figsize=(6,3))
-    plt.plot(df["Date"], df["Value"], marker='o')
-    plt.title(title)
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    buf = BytesIO()
-    plt.savefig(buf, format="png")
-    buf.seek(0)
-    st.image(buf)
+    df = df.set_index("Date")
+    st.line_chart(df, use_container_width=True)
 
-# 显示趋势图
 plot_trend(sp_history, "S&P 500")
 plot_trend(tnx_history, "US 10Y Treasury (%)")
 plot_trend(gold_history, "Gold (USD/oz)")
