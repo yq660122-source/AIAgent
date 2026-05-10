@@ -2,3 +2,4 @@ feedparser
 requests
 fastapi
 uvicorn
+streamlit
