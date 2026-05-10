@@ -1,10 +1,3 @@
-import subprocess
-import sys
-
-# 安装依赖
-subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "feedparser"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
 
 import streamlit as st
 import feedparser
