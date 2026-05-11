@@ -3,7 +3,7 @@ import requests
 import xml.etree.ElementTree as ET
 import pandas as pd
 from datetime import datetime
-import altair as alt
+import plotly.graph_objects as go
 
 # ======================
 # 页面设置
@@ -16,25 +16,21 @@ st.title("AI FINANCIAL INTELLIGENCE SYSTEM 🚀")
 # ======================
 FRED_API_KEY = "2bac9607b4b2e991e610838fae24637c"
 
-# 新闻源
 RSS_FEEDS = {
     "US Fed": "https://www.federalreserve.gov/feeds/press_all.xml",
     "ECB": "https://www.ecb.europa.eu/rss/press.xml"
 }
 
-KEYWORDS = ["战争", "疫情", "能源", "利率", "政策"]  # 现在仅作参考，可不用于过滤
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
+}
 
-# 市场指标
 FRED_SERIES = {
     "S&P 500": "SP500",
     "US 10Y Treasury (%)": "DGS10",
     "黄金 (USD/oz)": "GOLDAMGBD228NLBM",
     "WTI 原油 (USD/barrel)": "DCOILWTICO",
     "USD/CNY": "DEXCHUS"
-}
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
 }
 
 # ======================
@@ -50,7 +46,6 @@ def fetch_rss(url, country):
             title = i.find("title").text
             link = i.find("link").text
             pub_date = i.find("pubDate").text
-            # 不再过滤关键词，保证至少有新闻
             items.append({"country": country, "title": title, "link": link, "date": pub_date})
         if not items:
             st.warning(f"{country} 新闻抓取成功，但无新闻数据")
@@ -60,7 +55,7 @@ def fetch_rss(url, country):
         return []
 
 # ======================
-# FRED 指标抓取
+# FRED 指标抓取函数
 # ======================
 def get_fred_latest(series_id):
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json&sort_order=desc&limit=30"
@@ -136,28 +131,28 @@ with col2:
         st.write("暂无指标数据")
 
 # ======================
-# 趋势图
+# 双轴趋势图
 # ======================
-st.subheader("📈 指标趋势图")
+st.subheader("📈 指标趋势图（双轴）")
 
-combined = pd.DataFrame()
+fig = go.Figure()
 for name, hist in history_dict.items():
     if hist:
         df = pd.DataFrame(hist, columns=["Date","Value"])
         df["Date"] = pd.to_datetime(df["Date"])
-        df["指标"] = name
-        combined = pd.concat([combined, df])
+        if name in ["S&P 500","US 10Y Treasury (%)"]:
+            fig.add_trace(go.Scatter(x=df["Date"], y=df["Value"], mode='lines', name=name, yaxis='y1'))
+        else:
+            fig.add_trace(go.Scatter(x=df["Date"], y=df["Value"], mode='lines', name=name, yaxis='y2'))
 
-if not combined.empty:
-    chart = alt.Chart(combined).mark_line().encode(
-        x="Date:T",
-        y="Value:Q",
-        color="指标:N",
-        tooltip=["指标", "Date", "Value"]
-    ).interactive()
-    st.altair_chart(chart, use_container_width=True)
-else:
-    st.write("暂无趋势数据")
+fig.update_layout(
+    xaxis_title="日期",
+    yaxis=dict(title="S&P500 / US10Y", side="left"),
+    yaxis2=dict(title="商品 / 汇率", overlaying='y', side='right'),
+    legend_title="指标",
+    hovermode="x unified"
+)
+st.plotly_chart(fig, use_container_width=True)
 
 # ======================
 # AI分析占位
