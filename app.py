@@ -13,7 +13,7 @@ st.title("AI FINANCIAL INTELLIGENCE SYSTEM 🚀")
 # ======================
 # API KEY
 # ======================
-FRED_API_KEY = "你的FRED_API_KEY"
+FRED_API_KEY = "2bac9607b4b2e991e610838fae24637c"
 
 # ======================
 # 新闻抓取
