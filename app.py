@@ -16,7 +16,7 @@ st.title("AI FINANCIAL INTELLIGENCE SYSTEM 🚀")
 FRED_API_KEY = "2bac9607b4b2e991e610838fae24637c"
 
 # ======================
-# 新闻抓取
+# 新闻抓取函数
 # ======================
 def fetch_rss(url, country_name):
     try:
@@ -41,18 +41,8 @@ def fetch_rss(url, country_name):
         st.warning(f"抓取 {country_name} 新闻失败: {e}")
         return []
 
-rss_feeds = {
-    "US Fed": "https://www.federalreserve.gov/feeds/press_all.xml"
-}
-
-all_news = []
-for country, url in rss_feeds.items():
-    all_news += fetch_rss(url, country)
-
-news_df = pd.DataFrame(all_news)
-
 # ======================
-# FRED 数据抓取
+# FRED 数据抓取函数
 # ======================
 def get_fred_latest(series_id):
     url = (
@@ -71,10 +61,8 @@ def get_fred_latest(series_id):
         if len(valid_obs) == 0:
             st.error(f"{series_id} 没有有效数据")
             return None, None, []
-        # 最新数据
         value = float(valid_obs[0]["value"])
         date = valid_obs[0]["date"]
-        # 历史数据
         history = [(obs["date"], float(obs["value"])) for obs in valid_obs]
         history.reverse()
         return date, value, history
@@ -83,19 +71,44 @@ def get_fred_latest(series_id):
         return None, None, []
 
 # ======================
-# 获取指标
+# 获取新闻数据并缓存
 # ======================
-indicator_data = []
+if "all_news" not in st.session_state:
+    rss_feeds = {
+        "US Fed": "https://www.federalreserve.gov/feeds/press_all.xml"
+    }
+    all_news = []
+    for country, url in rss_feeds.items():
+        all_news += fetch_rss(url, country)
+    st.session_state["all_news"] = all_news
+else:
+    all_news = st.session_state["all_news"]
 
-# S&P500
-sp_date, sp_value, sp_history = get_fred_latest("SP500")
-if sp_value is not None:
-    indicator_data.append({"指标": "S&P 500", "最新值": sp_value, "日期": sp_date})
+news_df = pd.DataFrame(all_news)
 
-# US 10Y Treasury
-tnx_date, tnx_value, tnx_history = get_fred_latest("DGS10")
-if tnx_value is not None:
-    indicator_data.append({"指标": "US 10Y Treasury (%)", "最新值": tnx_value, "日期": tnx_date})
+# ======================
+# 获取指标数据并缓存
+# ======================
+if "indicator_data" not in st.session_state:
+    indicator_data = []
+
+    # S&P500
+    sp_date, sp_value, sp_history = get_fred_latest("SP500")
+    if sp_value is not None:
+        indicator_data.append({"指标": "S&P 500", "最新值": sp_value, "日期": sp_date})
+
+    # US 10Y Treasury
+    tnx_date, tnx_value, tnx_history = get_fred_latest("DGS10")
+    if tnx_value is not None:
+        indicator_data.append({"指标": "US 10Y Treasury (%)", "最新值": tnx_value, "日期": tnx_date})
+
+    st.session_state["indicator_data"] = indicator_data
+    st.session_state["sp_history"] = sp_history
+    st.session_state["tnx_history"] = tnx_history
+else:
+    indicator_data = st.session_state["indicator_data"]
+    sp_history = st.session_state["sp_history"]
+    tnx_history = st.session_state["tnx_history"]
 
 indicator_df = pd.DataFrame(indicator_data)
 
@@ -119,25 +132,24 @@ with col2:
         st.write("暂无指标数据")
 
 # ======================
-# 趋势图（Streamlit 内置）
+# 趋势图
 # ======================
 st.subheader("📈 指标趋势图")
 
 def plot_trend(history, title):
     if len(history) == 0:
-        st.write(f"{title} 无历史数据")
         return
     df = pd.DataFrame(history, columns=["Date", "Value"])
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.set_index("Date")
-    st.line_chart(df)      # 显示折线图
-    st.dataframe(df)       # 可选：显示表格
+    st.write(title)
+    st.line_chart(df)
 
 plot_trend(sp_history, "S&P 500")
 plot_trend(tnx_history, "US 10Y Treasury (%)")
 
 # ======================
-# AI 分析占位
+# AI 分析
 # ======================
 st.subheader("🤖 AI 分析结果")
 
@@ -160,7 +172,9 @@ st.json(analysis_result)
 # 刷新按钮
 # ======================
 if st.button("刷新数据"):
-    # 方法1: 重新运行整个脚本
-    for key in st.session_state.keys():
-        del st.session_state[key]   # 清空 session_state
-    st.experimental_rerun()         # 如果你的 Streamlit 版本支持这个
+    # 清空 session_state，提示用户刷新浏览器
+    st.session_state.pop("all_news", None)
+    st.session_state.pop("indicator_data", None)
+    st.session_state.pop("sp_history", None)
+    st.session_state.pop("tnx_history", None)
+    st.write("数据已重置，请刷新浏览器页面以更新数据")
