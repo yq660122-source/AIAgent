@@ -115,6 +115,7 @@ indicator_df = pd.DataFrame(indicator_data)
 # ======================
 col1, col2 = st.columns([3,1])
 
+# 左侧新闻
 with col1:
     st.subheader("📢 最新央行新闻")
     if not news_df.empty:
@@ -123,18 +124,36 @@ with col1:
     else:
         st.write("暂无新闻数据")
 
+# 右侧指标 + metric
 with col2:
     st.subheader("📊 市场指标")
     if not indicator_df.empty:
-        st.dataframe(indicator_df, use_container_width=True)
+        for idx, row in indicator_df.iterrows():
+            # 计算涨跌幅
+            hist = history_dict.get(row["指标"], [])
+            if hist and len(hist) > 1:
+                change = (hist[-1][1] - hist[0][1])/hist[0][1]*100
+                st.metric(label=row["指标"], value=f"{row['最新值']:.2f}", delta=f"{change:.2f}%")
+            else:
+                st.metric(label=row["指标"], value=f"{row['最新值']:.2f}")
     else:
         st.write("暂无指标数据")
 
 # ======================
-# 双轴趋势图
+# 单指标折线图（直观）
 # ======================
-st.subheader("📈 指标趋势图（双轴）")
+st.subheader("📈 单指标趋势图")
+for name, hist in history_dict.items():
+    if hist:
+        df = pd.DataFrame(hist, columns=["Date","Value"])
+        df["Date"] = pd.to_datetime(df["Date"])
+        st.subheader(name)
+        st.line_chart(df.set_index("Date"))
 
+# ======================
+# 双轴趋势图（整体对比）
+# ======================
+st.subheader("📈 双轴趋势图（整体趋势对比）")
 fig = go.Figure()
 for name, hist in history_dict.items():
     if hist:
