@@ -3,7 +3,7 @@ import streamlit as st
 import requests
 import xml.etree.ElementTree as ET
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.graph_objects as go
 
 # ======================
@@ -15,8 +15,8 @@ st.title("AI FINANCIAL INTELLIGENCE SYSTEM 🚀")
 # ======================
 # 配置
 # ======================
-FRED_API_KEY = os.getenv("2bac9607b4b2e991e610838fae24637c")
-DEEPSEEK_API_KEY = os.getenv("sk-175cd729d88249309c7f64c06e886ab1")
+FRED_API_KEY = os.getenv("FRED_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 RSS_FEEDS = {
     "US Fed": "https://www.federalreserve.gov/feeds/press_all.xml",
@@ -24,7 +24,7 @@ RSS_FEEDS = {
 }
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0"
 }
 
 FRED_SERIES = {
@@ -36,7 +36,7 @@ FRED_SERIES = {
 }
 
 # ======================
-# 新闻抓取函数（稳定版）
+# 新闻抓取函数
 # ======================
 def fetch_rss(url, country):
     try:
@@ -44,7 +44,7 @@ def fetch_rss(url, country):
         resp.raise_for_status()
         root = ET.fromstring(resp.content)
         items = []
-        for i in root.findall(".//item")[:20]:  # 最新20条新闻
+        for i in root.findall(".//item")[:20]:
             title = i.find("title").text
             link = i.find("link").text
             pub_date_str = i.find("pubDate").text
@@ -64,12 +64,16 @@ def fetch_rss(url, country):
 # DeepSeek 实时分析
 # ======================
 def analyze_with_deepseek(text):
-    url = "https://api.deepseek.com/analyze"  # 示例URL，请替换成实际URL
+    url = "https://api.deepseek.com"  # OpenAI 兼容 Base URL
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         "Content-Type": "application/json"
     }
-    payload = {"text": text, "options": {"tasks":["summary","risk_score","trend"]}}
+    payload = {
+        "text": text,
+        "model": "deepseek-v4-flash",
+        "options": {"tasks":["summary","risk_score","trend"]}
+    }
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=20)
         resp.raise_for_status()
@@ -83,7 +87,7 @@ def analyze_with_deepseek(text):
         return {"summary":"分析失败", "risk_score":0, "trend":"中性"}
 
 # ======================
-# FRED 指标抓取函数（稳定版）
+# FRED 指标抓取函数
 # ======================
 def get_fred_latest(series_id):
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json&sort_order=desc&limit=30"
@@ -148,7 +152,7 @@ col1, col2 = st.columns([3,1])
 
 # 左侧新闻
 with col1:
-    st.subheader("📢 最新央行新闻（稳定版）")
+    st.subheader("📢 最新央行新闻（前20条）")
     if not news_df.empty:
         for idx, row in news_df.iterrows():
             st.markdown(f"**[{row['title']}]({row['link']})** - {row['country']} ({row['date']:%Y-%m-%d %H:%M})")
@@ -204,3 +208,4 @@ fig.update_layout(
     legend_title="指标",
     hovermode="x unified"
 )
+st.plotly_chart(fig, use_container_width=True)
