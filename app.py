@@ -15,8 +15,8 @@ st.title("AI FINANCIAL INTELLIGENCE SYSTEM 🚀")
 # ======================
 # 配置
 # ======================
-FRED_API_KEY = os.getenv("FRED_API_KEY")  # 你已配置环境变量
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")  # 你已配置环境变量
+FRED_API_KEY = os.getenv("2bac9607b4b2e991e610838fae24637c")
+DEEPSEEK_API_KEY = os.getenv("sk-175cd729d88249309c7f64c06e886ab1")
 
 RSS_FEEDS = {
     "US Fed": "https://www.federalreserve.gov/feeds/press_all.xml",
@@ -36,24 +36,25 @@ FRED_SERIES = {
 }
 
 # ======================
-# 新闻抓取函数（仅24小时内）
+# 新闻抓取函数（稳定版）
 # ======================
 def fetch_rss(url, country):
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp = requests.get(url, headers=HEADERS, timeout=20)
         resp.raise_for_status()
         root = ET.fromstring(resp.content)
         items = []
-        now = datetime.utcnow()
-        for i in root.findall(".//item")[:50]:  # 抓前50条避免遗漏
+        for i in root.findall(".//item")[:20]:  # 最新20条新闻
             title = i.find("title").text
             link = i.find("link").text
             pub_date_str = i.find("pubDate").text
-            pub_date = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %Z")
-            if now - pub_date <= timedelta(days=1):  # 仅24小时内
-                items.append({"country": country, "title": title, "link": link, "date": pub_date})
+            try:
+                pub_date = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %Z")
+            except:
+                pub_date = datetime.utcnow()
+            items.append({"country": country, "title": title, "link": link, "date": pub_date})
         if not items:
-            st.warning(f"{country} 新闻抓取成功，但24小时内无新新闻")
+            st.warning(f"{country} 新闻抓取成功，但无新闻数据")
         return items
     except Exception as e:
         st.warning(f"{country} 新闻抓取失败: {e}")
@@ -63,42 +64,38 @@ def fetch_rss(url, country):
 # DeepSeek 实时分析
 # ======================
 def analyze_with_deepseek(text):
-    url = "https://api.deepseek.com/analyze"  # 示例URL，请按官方文档替换
+    url = "https://api.deepseek.com/analyze"  # 示例URL，请替换成实际URL
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         "Content-Type": "application/json"
     }
-    payload = {
-        "text": text,
-        "options": {"tasks":["summary","risk_score","trend"]}
-    }
+    payload = {"text": text, "options": {"tasks":["summary","risk_score","trend"]}}
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=15)
+        resp = requests.post(url, json=payload, headers=headers, timeout=20)
         resp.raise_for_status()
         data = resp.json()
         return {
-            "summary": data.get("summary",""),
-            "risk_score": data.get("risk_score", 0),
+            "summary": data.get("summary","分析失败"),
+            "risk_score": data.get("risk_score",0),
             "trend": data.get("trend","中性")
         }
-    except Exception as e:
+    except:
         return {"summary":"分析失败", "risk_score":0, "trend":"中性"}
 
 # ======================
-# FRED 指标抓取函数
+# FRED 指标抓取函数（稳定版）
 # ======================
 def get_fred_latest(series_id):
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json&sort_order=desc&limit=30"
     try:
-        resp = requests.get(url, timeout=10).json()
+        resp = requests.get(url, timeout=20).json()
         obs = [o for o in resp.get("observations", []) if o["value"] != "."]
         if not obs:
             return None, None, []
         history = [(o["date"], float(o["value"])) for o in obs]
         history.reverse()
         return obs[0]["date"], float(obs[0]["value"]), history
-    except Exception as e:
-        st.error(f"{series_id} 抓取失败: {e}")
+    except:
         return None, None, []
 
 # ======================
@@ -115,9 +112,7 @@ if "all_news" not in st.session_state:
     news = []
     for country, url in RSS_FEEDS.items():
         news += fetch_rss(url, country)
-    # 按发布时间倒序
     news.sort(key=lambda x: x["date"], reverse=True)
-    # DeepSeek 分析实时生成
     for n in news:
         analysis = analyze_with_deepseek(n["title"])
         n.update(analysis)
@@ -153,7 +148,7 @@ col1, col2 = st.columns([3,1])
 
 # 左侧新闻
 with col1:
-    st.subheader("📢 最新央行新闻（24小时内）")
+    st.subheader("📢 最新央行新闻（稳定版）")
     if not news_df.empty:
         for idx, row in news_df.iterrows():
             st.markdown(f"**[{row['title']}]({row['link']})** - {row['country']} ({row['date']:%Y-%m-%d %H:%M})")
@@ -161,7 +156,7 @@ with col1:
             st.markdown(f"风险评分: {row['risk_score']}, 趋势: {row['trend']}")
             st.markdown("---")
     else:
-        st.write("暂无最新新闻")
+        st.write("暂无新闻")
 
 # 右侧指标 + metric
 with col2:
@@ -209,4 +204,3 @@ fig.update_layout(
     legend_title="指标",
     hovermode="x unified"
 )
-st.plotly_chart(fig, use_container_width=True)
