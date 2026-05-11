@@ -71,9 +71,24 @@ def get_fred_latest(series_id):
         return None, None, []
 
 # ======================
-# 获取新闻数据并缓存
+# 点击刷新按钮逻辑
 # ======================
-if "all_news" not in st.session_state:
+if "refresh_triggered" not in st.session_state:
+    st.session_state["refresh_triggered"] = False
+
+if st.button("刷新数据"):
+    # 清空缓存
+    st.session_state.pop("all_news", None)
+    st.session_state.pop("indicator_data", None)
+    st.session_state.pop("sp_history", None)
+    st.session_state.pop("tnx_history", None)
+    st.session_state["refresh_triggered"] = True
+    st.experimental_rerun()  # 自动刷新整个页面
+
+# ======================
+# 获取新闻数据
+# ======================
+if "all_news" not in st.session_state or st.session_state["refresh_triggered"]:
     rss_feeds = {
         "US Fed": "https://www.federalreserve.gov/feeds/press_all.xml"
     }
@@ -81,15 +96,16 @@ if "all_news" not in st.session_state:
     for country, url in rss_feeds.items():
         all_news += fetch_rss(url, country)
     st.session_state["all_news"] = all_news
+    st.session_state["refresh_triggered"] = False
 else:
     all_news = st.session_state["all_news"]
 
 news_df = pd.DataFrame(all_news)
 
 # ======================
-# 获取指标数据并缓存
+# 获取指标数据
 # ======================
-if "indicator_data" not in st.session_state:
+if "indicator_data" not in st.session_state or st.session_state["refresh_triggered"]:
     indicator_data = []
 
     # S&P500
@@ -167,14 +183,3 @@ def analyze_news(news_list):
 
 analysis_result = analyze_news(all_news)
 st.json(analysis_result)
-
-# ======================
-# 刷新按钮
-# ======================
-if st.button("刷新数据"):
-    # 清空 session_state，提示用户刷新浏览器
-    st.session_state.pop("all_news", None)
-    st.session_state.pop("indicator_data", None)
-    st.session_state.pop("sp_history", None)
-    st.session_state.pop("tnx_history", None)
-    st.write("数据已重置，请刷新浏览器页面以更新数据")
