@@ -13,7 +13,7 @@ st.title("AI FINANCIAL INTELLIGENCE SYSTEM 🚀")
 # ======================
 # API KEY
 # ======================
-FRED_API_KEY = "2bac9607b4b2e991e610838fae24637c"
+FRED_API_KEY = "你的FRED_API_KEY"
 
 # ======================
 # 新闻抓取
@@ -71,8 +71,10 @@ def get_fred_latest(series_id):
         if len(valid_obs) == 0:
             st.error(f"{series_id} 没有有效数据")
             return None, None, []
+        # 最新数据
         value = float(valid_obs[0]["value"])
         date = valid_obs[0]["date"]
+        # 历史数据
         history = [(obs["date"], float(obs["value"])) for obs in valid_obs]
         history.reverse()
         return date, value, history
@@ -123,12 +125,13 @@ st.subheader("📈 指标趋势图")
 
 def plot_trend(history, title):
     if len(history) == 0:
+        st.write(f"{title} 无历史数据")
         return
     df = pd.DataFrame(history, columns=["Date", "Value"])
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.set_index("Date")
-    st.write(title)
-    st.line_chart(df)
+    st.line_chart(df)      # 显示折线图
+    st.dataframe(df)       # 可选：显示表格
 
 plot_trend(sp_history, "S&P 500")
 plot_trend(tnx_history, "US 10Y Treasury (%)")
@@ -136,4 +139,25 @@ plot_trend(tnx_history, "US 10Y Treasury (%)")
 # ======================
 # AI 分析占位
 # ======================
-st
+st.subheader("🤖 AI 分析结果")
+
+def analyze_news(news_list):
+    result = {}
+    countries = set(n["country"] for n in news_list)
+    for country in countries:
+        count = sum(1 for n in news_list if n["country"] == country)
+        result[country] = {
+            "新闻数量": count,
+            "风险评分": round(count * 0.1, 2),
+            "趋势": "中性"
+        }
+    return result
+
+analysis_result = analyze_news(all_news)
+st.json(analysis_result)
+
+# ======================
+# 刷新按钮
+# ======================
+if st.button("刷新数据"):
+    st.experimental_rerun()
