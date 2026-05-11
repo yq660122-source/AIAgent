@@ -71,20 +71,15 @@ def get_fred_latest(series_id):
         return None, None, []
 
 # ======================
-# 点击刷新按钮逻辑
+# 刷新按钮
 # ======================
-if "refresh_triggered" not in st.session_state:
-    st.session_state["refresh_triggered"] = False
-
 if st.button("刷新数据"):
     # 清空缓存
     st.session_state.pop("all_news", None)
     st.session_state.pop("indicator_data", None)
     st.session_state.pop("sp_history", None)
     st.session_state.pop("tnx_history", None)
-    st.session_state["refresh_triggered"] = True
-    st.experimental_rerun()  # 自动刷新整个页面
-
+    st.write("数据已清空，请手动刷新浏览器页面以重新加载最新数据")
 # ======================
 # 获取新闻数据
 # ======================
