@@ -1,8 +1,9 @@
+import os
 import streamlit as st
 import requests
 import xml.etree.ElementTree as ET
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
 # ======================
@@ -14,7 +15,8 @@ st.title("AI FINANCIAL INTELLIGENCE SYSTEM 🚀")
 # ======================
 # 配置
 # ======================
-FRED_API_KEY = "2bac9607b4b2e991e610838fae24637c"
+FRED_API_KEY = os.getenv("FRED_API_KEY")  # 你已配置环境变量
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")  # 你已配置环境变量
 
 RSS_FEEDS = {
     "US Fed": "https://www.federalreserve.gov/feeds/press_all.xml",
@@ -34,7 +36,7 @@ FRED_SERIES = {
 }
 
 # ======================
-# 新闻抓取函数
+# 新闻抓取函数（仅24小时内）
 # ======================
 def fetch_rss(url, country):
     try:
@@ -42,17 +44,45 @@ def fetch_rss(url, country):
         resp.raise_for_status()
         root = ET.fromstring(resp.content)
         items = []
-        for i in root.findall(".//item")[:15]:
+        now = datetime.utcnow()
+        for i in root.findall(".//item")[:50]:  # 抓前50条避免遗漏
             title = i.find("title").text
             link = i.find("link").text
-            pub_date = i.find("pubDate").text
-            items.append({"country": country, "title": title, "link": link, "date": pub_date})
+            pub_date_str = i.find("pubDate").text
+            pub_date = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %Z")
+            if now - pub_date <= timedelta(days=1):  # 仅24小时内
+                items.append({"country": country, "title": title, "link": link, "date": pub_date})
         if not items:
-            st.warning(f"{country} 新闻抓取成功，但无新闻数据")
+            st.warning(f"{country} 新闻抓取成功，但24小时内无新新闻")
         return items
     except Exception as e:
         st.warning(f"{country} 新闻抓取失败: {e}")
         return []
+
+# ======================
+# DeepSeek 实时分析
+# ======================
+def analyze_with_deepseek(text):
+    url = "https://api.deepseek.com/analyze"  # 示例URL，请按官方文档替换
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "text": text,
+        "options": {"tasks":["summary","risk_score","trend"]}
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        return {
+            "summary": data.get("summary",""),
+            "risk_score": data.get("risk_score", 0),
+            "trend": data.get("trend","中性")
+        }
+    except Exception as e:
+        return {"summary":"分析失败", "risk_score":0, "trend":"中性"}
 
 # ======================
 # FRED 指标抓取函数
@@ -76,7 +106,7 @@ def get_fred_latest(series_id):
 # ======================
 if st.button("刷新数据"):
     st.session_state.clear()
-    st.write("数据已清空，请刷新浏览器重新加载最新数据")
+    st.write("缓存已清空，重新加载最新数据")
 
 # ======================
 # 新闻数据
@@ -85,6 +115,12 @@ if "all_news" not in st.session_state:
     news = []
     for country, url in RSS_FEEDS.items():
         news += fetch_rss(url, country)
+    # 按发布时间倒序
+    news.sort(key=lambda x: x["date"], reverse=True)
+    # DeepSeek 分析实时生成
+    for n in news:
+        analysis = analyze_with_deepseek(n["title"])
+        n.update(analysis)
     st.session_state["all_news"] = news
 else:
     news = st.session_state["all_news"]
@@ -117,22 +153,24 @@ col1, col2 = st.columns([3,1])
 
 # 左侧新闻
 with col1:
-    st.subheader("📢 最新央行新闻")
+    st.subheader("📢 最新央行新闻（24小时内）")
     if not news_df.empty:
         for idx, row in news_df.iterrows():
-            st.markdown(f"[{row['title']}]({row['link']}) - {row['country']} ({row['date']})")
+            st.markdown(f"**[{row['title']}]({row['link']})** - {row['country']} ({row['date']:%Y-%m-%d %H:%M})")
+            st.markdown(f"摘要: {row['summary']}")
+            st.markdown(f"风险评分: {row['risk_score']}, 趋势: {row['trend']}")
+            st.markdown("---")
     else:
-        st.write("暂无新闻数据")
+        st.write("暂无最新新闻")
 
 # 右侧指标 + metric
 with col2:
     st.subheader("📊 市场指标")
     if not indicator_df.empty:
         for idx, row in indicator_df.iterrows():
-            # 计算涨跌幅
             hist = history_dict.get(row["指标"], [])
-            if hist and len(hist) > 1:
-                change = (hist[-1][1] - hist[0][1])/hist[0][1]*100
+            if hist and len(hist)>1:
+                change = (hist[-1][1]-hist[0][1])/hist[0][1]*100
                 st.metric(label=row["指标"], value=f"{row['最新值']:.2f}", delta=f"{change:.2f}%")
             else:
                 st.metric(label=row["指标"], value=f"{row['最新值']:.2f}")
@@ -140,7 +178,7 @@ with col2:
         st.write("暂无指标数据")
 
 # ======================
-# 单指标折线图（直观）
+# 单指标折线图
 # ======================
 st.subheader("📈 单指标趋势图")
 for name, hist in history_dict.items():
@@ -151,7 +189,7 @@ for name, hist in history_dict.items():
         st.line_chart(df.set_index("Date"))
 
 # ======================
-# 双轴趋势图（整体对比）
+# 双轴趋势图
 # ======================
 st.subheader("📈 双轴趋势图（整体趋势对比）")
 fig = go.Figure()
@@ -172,17 +210,3 @@ fig.update_layout(
     hovermode="x unified"
 )
 st.plotly_chart(fig, use_container_width=True)
-
-# ======================
-# AI分析占位
-# ======================
-st.subheader("🤖 AI 分析结果")
-def analyze_news(news_list):
-    result = {}
-    countries = set(n["country"] for n in news_list)
-    for c in countries:
-        count = sum(1 for n in news_list if n["country"]==c)
-        result[c] = {"新闻数量": count, "风险评分": round(count*0.1,2), "趋势":"中性"}
-    return result
-
-st.dataframe(analyze_news(news), use_container_width=True)
