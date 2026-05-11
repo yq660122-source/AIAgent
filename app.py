@@ -15,35 +15,31 @@ st.title("AI FINANCIAL INTELLIGENCE SYSTEM 🚀")
 # ======================
 FRED_API_KEY = "2bac9607b4b2e991e610838fae24637c"
 
-# 新闻源
+# 新闻源（稳定可用）
 RSS_FEEDS = {
     "US Fed": "https://www.federalreserve.gov/feeds/press_all.xml",
-    "ECB": "https://www.ecb.europa.eu/rss/press.xml",
-    "BOE": "https://www.bankofengland.co.uk/news/rss",
-    "PBoC": "http://www.pbc.gov.cn/goutongjiaoliu/113456/113469/3793006/index.xml"  # 示例 RSS
+    "ECB": "https://www.ecb.europa.eu/rss/press.xml"
 }
 
 KEYWORDS = ["战争", "疫情", "能源", "利率", "政策"]
 
-# 市场指标
+# 市场指标（FRED 系列）
 FRED_SERIES = {
     "S&P 500": "SP500",
-    "US 10Y Treasury (%)": "DGS10"
-}
-
-# 商品/汇率数据接口（示例：公开 CSV 或网站抓取）
-COMMODITY_RATES = {
-    "黄金 (USD/oz)": "https://www.quandl.com/api/v3/datasets/LBMA/GOLD.json?api_key=YOUR_QUANDL_KEY",
-    "原油 (USD/barrel)": "https://www.quandl.com/api/v3/datasets/CHRIS/CME_CL1.json?api_key=YOUR_QUANDL_KEY",
-    "USD/CNY": "https://www.floatrates.com/daily/usd.xml"
+    "US 10Y Treasury (%)": "DGS10",
+    "黄金 (USD/oz)": "GOLDAMGBD228NLBM",
+    "WTI 原油 (USD/barrel)": "DCOILWTICO",
+    "USD/CNY": "DEXCHUS"
 }
 
 # ======================
 # 3. 新闻抓取函数
 # ======================
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"}
+
 def fetch_rss_filtered(url, country):
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
         root = ET.fromstring(resp.content)
         items = []
@@ -53,13 +49,15 @@ def fetch_rss_filtered(url, country):
             pub_date = i.find("pubDate").text
             if any(k in title for k in KEYWORDS):
                 items.append({"country": country, "title": title, "link": link, "date": pub_date})
+        if not items:
+            st.warning(f"{country} 新闻抓取成功，但无匹配关键词新闻")
         return items
     except Exception as e:
         st.warning(f"{country} 新闻抓取失败: {e}")
         return []
 
 # ======================
-# 4. FRED 指标抓取
+# 4. FRED 指标抓取函数
 # ======================
 def get_fred_latest(series_id):
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json&sort_order=desc&limit=30"
@@ -75,24 +73,14 @@ def get_fred_latest(series_id):
         return None, None, []
 
 # ======================
-# 5. 商品/汇率抓取占位
-# ======================
-def fetch_commodity_rate(name, url):
-    # 这里示例占位，可以用实际 API 或网页解析替换
-    try:
-        return 0.0, []  # 最新值, 历史列表
-    except:
-        return None, []
-
-# ======================
-# 6. 刷新按钮
+# 5. 刷新按钮
 # ======================
 if st.button("刷新数据"):
     st.session_state.clear()
     st.write("数据已清空，请刷新浏览器重新加载最新数据")
 
 # ======================
-# 7. 新闻数据
+# 6. 新闻数据处理
 # ======================
 if "all_news" not in st.session_state:
     news = []
@@ -105,26 +93,16 @@ else:
 news_df = pd.DataFrame(news)
 
 # ======================
-# 8. 指标数据
+# 7. 指标数据处理
 # ======================
 if "indicator_data" not in st.session_state:
     indicator_data = []
     history_dict = {}
-
-    # FRED 数据
     for name, series_id in FRED_SERIES.items():
         date, value, history = get_fred_latest(series_id)
         if value is not None:
             indicator_data.append({"指标": name, "最新值": value, "日期": date})
             history_dict[name] = history
-
-    # 商品/汇率占位
-    for name, url in COMMODITY_RATES.items():
-        value, history = fetch_commodity_rate(name, url)
-        if value is not None:
-            indicator_data.append({"指标": name, "最新值": value, "日期": datetime.now().strftime("%Y-%m-%d")})
-            history_dict[name] = history
-
     st.session_state["indicator_data"] = indicator_data
     st.session_state["history_dict"] = history_dict
 else:
@@ -134,7 +112,7 @@ else:
 indicator_df = pd.DataFrame(indicator_data)
 
 # ======================
-# 9. 页面布局
+# 8. 页面布局
 # ======================
 col1, col2 = st.columns([3,1])
 
@@ -154,7 +132,7 @@ with col2:
         st.write("暂无指标数据")
 
 # ======================
-# 10. 趋势图
+# 9. 趋势图显示
 # ======================
 st.subheader("📈 指标趋势图")
 for name, hist in history_dict.items():
@@ -165,7 +143,7 @@ for name, hist in history_dict.items():
         st.line_chart(df, height=250, use_container_width=True)
 
 # ======================
-# 11. AI分析占位
+# 10. AI分析占位
 # ======================
 st.subheader("🤖 AI 分析结果")
 def analyze_news(news_list):
