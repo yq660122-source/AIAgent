@@ -160,4 +160,7 @@ st.json(analysis_result)
 # 刷新按钮
 # ======================
 if st.button("刷新数据"):
-    st.experimental_rerun()
+    # 方法1: 重新运行整个脚本
+    for key in st.session_state.keys():
+        del st.session_state[key]   # 清空 session_state
+    st.experimental_rerun()         # 如果你的 Streamlit 版本支持这个
