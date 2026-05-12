@@ -63,28 +63,55 @@ def fetch_rss(url, country):
 # ======================
 # DeepSeek 实时分析
 # ======================
-def analyze_with_deepseek(text):
-    url = "https://api.deepseek.com"  # OpenAI 兼容 Base URL
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "text": text,
-        "model": "deepseek-v4-flash",
-        "options": {"tasks":["summary","risk_score","trend"]}
-    }
-    try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=20)
-        resp.raise_for_status()
-        data = resp.json()
-        return {
-            "summary": data.get("summary","分析失败"),
-            "risk_score": data.get("risk_score",0),
-            "trend": data.get("trend","中性")
-        }
-    except:
-        return {"summary":"分析失败", "risk_score":0, "trend":"中性"}
+# ======================
+# AI 分析部分（DeepSeek 点击分析）
+# ======================
+st.subheader("🤖 AI 分析（点击按钮获取深度分析）")
+
+# 确保 session_state 存储每条新闻的分析结果
+if "news_analysis" not in st.session_state:
+    st.session_state["news_analysis"] = {}
+
+for idx, row in news_df.iterrows():
+    news_id = f"news_{idx}"  # 每条新闻唯一标识
+    st.markdown(f"**[{row['title']}]({row['link']})** - {row['country']} ({row['date']:%Y-%m-%d %H:%M})")
+    
+    # 检查是否已经分析过
+    if news_id in st.session_state["news_analysis"]:
+        analysis = st.session_state["news_analysis"][news_id]
+        st.markdown(f"摘要: {analysis['summary']}")
+        st.markdown(f"风险评分: {analysis['risk_score']}, 趋势: {analysis['trend']}")
+    else:
+        # 创建按钮
+        if st.button(f"深度分析这条新闻", key=news_id):
+            try:
+                url = "https://api.deepseek.com/v1/news/analyze"  # 这里填你实际 DeepSeek 接口 URL
+                headers = {
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "text": row['title'],
+                    "model": "deepseek-v4-flash",
+                    "options": {"tasks":["summary","risk_score","trend"], "system_prompt":"解读并分析该条新闻，要求专业贴合市场"}
+                }
+                resp = requests.post(url, json=payload, headers=headers, timeout=30)
+                resp.raise_for_status()
+                data = resp.json()
+                analysis = {
+                    "summary": data.get("summary","分析失败"),
+                    "risk_score": data.get("risk_score",0),
+                    "trend": data.get("trend","中性")
+                }
+            except:
+                analysis = {"summary":"分析失败","risk_score":0,"trend":"中性"}
+            
+            # 保存到 session_state，刷新后仍保留
+            st.session_state["news_analysis"][news_id] = analysis
+            st.markdown(f"摘要: {analysis['summary']}")
+            st.markdown(f"风险评分: {analysis['risk_score']}, 趋势: {analysis['trend']}")
+    
+    st.markdown("---")
 
 # ======================
 # FRED 指标抓取函数
