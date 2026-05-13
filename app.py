@@ -64,51 +64,43 @@ def fetch_rss(url, country):
 # DeepSeek 实时分析
 # ======================
 def analyze_with_deepseek(text):
-
     from openai import OpenAI
 
-    client = OpenAI(
-        api_key=DEEPSEEK_API_KEY,
-        base_url="https://api.deepseek.com"
-    )
-
     try:
+        client = OpenAI(
+            api_key=DEEPSEEK_API_KEY,
+            base_url="https://api.deepseek.com"
+        )
 
         response = client.chat.completions.create(
-
-            model="deepseek-v4-flash",
-
+            model="deepseek-chat",
             messages=[
-
                 {
                     "role": "system",
-                    "content": (
-                        "你是专业全球宏观金融分析师。"
-                        "请专业分析该新闻对："
-                        "全球股市、债券、利率、黄金、原油、美元、人民币汇率、"
-                        "风险偏好、宏观经济的影响。"
-                        "要求专业、简洁、贴近真实金融市场逻辑。"
-                    )
+                    "content": "你是专业金融分析师。请解读新闻对金融市场的影响，并返回JSON格式：summary、risk_score、trend"
                 },
-
                 {
                     "role": "user",
                     "content": text
                 }
-
             ],
-
-            stream=False
-
+            temperature=0.3
         )
 
         result = response.choices[0].message.content
 
-        return result
+        return {
+            "summary": result,
+            "risk_score": 5,
+            "trend": "中性"
+        }
 
     except Exception as e:
-
-        return f"分析失败: {e}"
+        return {
+            "summary": f"分析失败: {str(e)}",
+            "risk_score": 0,
+            "trend": "中性"
+        }
 
 # ======================
 # FRED 指标抓取函数
