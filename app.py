@@ -63,55 +63,52 @@ def fetch_rss(url, country):
 # ======================
 # DeepSeek 实时分析
 # ======================
-# ======================
-# AI 分析部分（DeepSeek 点击分析）
-# ======================
-st.subheader("🤖 AI 分析（点击按钮获取深度分析）")
+def analyze_with_deepseek(text):
 
-# 确保 session_state 存储每条新闻的分析结果
-if "news_analysis" not in st.session_state:
-    st.session_state["news_analysis"] = {}
+    from openai import OpenAI
 
-for idx, row in news_df.iterrows():
-    news_id = f"news_{idx}"  # 每条新闻唯一标识
-    st.markdown(f"**[{row['title']}]({row['link']})** - {row['country']} ({row['date']:%Y-%m-%d %H:%M})")
-    
-    # 检查是否已经分析过
-    if news_id in st.session_state["news_analysis"]:
-        analysis = st.session_state["news_analysis"][news_id]
-        st.markdown(f"摘要: {analysis['summary']}")
-        st.markdown(f"风险评分: {analysis['risk_score']}, 趋势: {analysis['trend']}")
-    else:
-        # 创建按钮
-        if st.button(f"深度分析这条新闻", key=news_id):
-            try:
-                url = "https://api.deepseek.com/v1/news/analyze"  # 这里填你实际 DeepSeek 接口 URL
-                headers = {
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json"
+    client = OpenAI(
+        api_key=DEEPSEEK_API_KEY,
+        base_url="https://api.deepseek.com"
+    )
+
+    try:
+
+        response = client.chat.completions.create(
+
+            model="deepseek-v4-flash",
+
+            messages=[
+
+                {
+                    "role": "system",
+                    "content": (
+                        "你是专业全球宏观金融分析师。"
+                        "请专业分析该新闻对："
+                        "全球股市、债券、利率、黄金、原油、美元、人民币汇率、"
+                        "风险偏好、宏观经济的影响。"
+                        "要求专业、简洁、贴近真实金融市场逻辑。"
+                    )
+                },
+
+                {
+                    "role": "user",
+                    "content": text
                 }
-                payload = {
-                    "text": row['title'],
-                    "model": "deepseek-v4-flash",
-                    "options": {"tasks":["summary","risk_score","trend"], "system_prompt":"解读并分析该条新闻，要求专业贴合市场"}
-                }
-                resp = requests.post(url, json=payload, headers=headers, timeout=30)
-                resp.raise_for_status()
-                data = resp.json()
-                analysis = {
-                    "summary": data.get("summary","分析失败"),
-                    "risk_score": data.get("risk_score",0),
-                    "trend": data.get("trend","中性")
-                }
-            except:
-                analysis = {"summary":"分析失败","risk_score":0,"trend":"中性"}
-            
-            # 保存到 session_state，刷新后仍保留
-            st.session_state["news_analysis"][news_id] = analysis
-            st.markdown(f"摘要: {analysis['summary']}")
-            st.markdown(f"风险评分: {analysis['risk_score']}, 趋势: {analysis['trend']}")
-    
-    st.markdown("---")
+
+            ],
+
+            stream=False
+
+        )
+
+        result = response.choices[0].message.content
+
+        return result
+
+    except Exception as e:
+
+        return f"分析失败: {e}"
 
 # ======================
 # FRED 指标抓取函数
@@ -176,17 +173,49 @@ indicator_df = pd.DataFrame(indicator_data)
 # 页面布局
 # ======================
 col1, col2 = st.columns([3,1])
-
 # 左侧新闻
 with col1:
+
     st.subheader("📢 最新央行新闻（前20条）")
+
     if not news_df.empty:
+
         for idx, row in news_df.iterrows():
-            st.markdown(f"**[{row['title']}]({row['link']})** - {row['country']} ({row['date']:%Y-%m-%d %H:%M})")
-            st.markdown(f"摘要: {row['summary']}")
-            st.markdown(f"风险评分: {row['risk_score']}, 趋势: {row['trend']}")
+
+            st.markdown(
+                f"**[{row['title']}]({row['link']})** "
+                f"- {row['country']} "
+                f"({row['date']:%Y-%m-%d %H:%M})"
+            )
+
+            analysis_key = f"analysis_{idx}"
+
+            # 初始化缓存
+            if analysis_key not in st.session_state:
+                st.session_state[analysis_key] = None
+
+            # 分析按钮
+            if st.button("🧠 DeepSeek 深度分析", key=f"btn_{idx}"):
+
+                with st.spinner("DeepSeek 正在分析中..."):
+
+                    result = analyze_with_deepseek(row["title"])
+
+                    st.session_state[analysis_key] = result
+
+            # 显示分析结果
+            if st.session_state[analysis_key] is not None:
+
+                st.success("分析完成")
+
+                st.markdown("### 📌 AI 市场分析")
+
+                st.write(st.session_state[analysis_key])
+
             st.markdown("---")
+
     else:
+
         st.write("暂无新闻")
 
 # 右侧指标 + metric
