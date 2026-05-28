@@ -1,4 +1,0 @@
-feedparser
-requests
-fastapi
-uvicorn
