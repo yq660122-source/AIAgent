@@ -156,10 +156,14 @@ else:
 
 
 # ======================
-# 单指标趋势图
+# 单指标趋势图（Normalized）
 # ======================
 
-st.subheader("📈 单指标趋势图")
+st.subheader("📈 单指标趋势图（Normalized）")
+
+st.caption(
+    "所有资产以起始点 = 100 进行归一化，方便比较真实走势"
+)
 
 for name, hist in history_dict.items():
 
@@ -177,6 +181,44 @@ for name, hist in history_dict.items():
 
             df["Date"] = pd.to_datetime(df["Date"])
 
+            # ======================
+            # 数据清洗
+            # ======================
+
+            df["Value"] = pd.to_numeric(
+
+                df["Value"],
+
+                errors="coerce"
+
+            )
+
+            df = df.dropna()
+
+            if len(df) < 2:
+
+                continue
+
+            # ======================
+            # Normalized 处理
+            # ======================
+
+            base_value = df["Value"].iloc[0]
+
+            if base_value == 0:
+
+                continue
+
+            df["Normalized"] = (
+
+                df["Value"] / base_value
+
+            ) * 100
+
+            # ======================
+            # Plotly 图表
+            # ======================
+
             fig = go.Figure()
 
             fig.add_trace(
@@ -185,7 +227,7 @@ for name, hist in history_dict.items():
 
                     x=df["Date"],
 
-                    y=df["Value"],
+                    y=df["Normalized"],
 
                     mode="lines",
 
@@ -197,22 +239,25 @@ for name, hist in history_dict.items():
 
             fig.update_layout(
 
-    title=name,
+                title=f"{name}（Normalized）",
 
-    xaxis_title="日期",
+                xaxis_title="日期",
 
-    yaxis_title="数值",
+                yaxis_title="Normalized Index",
 
-    hovermode="x unified",
+                hovermode="x unified",
 
-    height=400,
+                height=400,
 
-    yaxis=dict(
-        autorange=True,
-        fixedrange=False
-    )
+                yaxis=dict(
 
-)
+                    autorange=True,
+
+                    fixedrange=False
+
+                )
+
+            )
 
             st.plotly_chart(
 
@@ -225,6 +270,3 @@ for name, hist in history_dict.items():
         except Exception as e:
 
             st.warning(f"{name} 图表生成失败: {e}")
-
-
-st.success("Market Trend 页面加载成功")
