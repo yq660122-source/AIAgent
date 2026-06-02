@@ -7,8 +7,10 @@ from datetime import datetime
 # API KEY
 # ======================
 
-FRED_API_KEY = os.getenv("FRED_API_KEY")
+FRED_API_KEY = "2bac9607b4b2e991e610838fae24637c"
 CACHE_DIR = "data/cache"
+
+print("FRED_API_KEY =", FRED_API_KEY)
 #
 def save_cache(series_id, data):
 

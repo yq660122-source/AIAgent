@@ -28,10 +28,7 @@ from engines.risk_engine import (
     calculate_risk_score,
     get_risk_level
 )
-#--------------
-from collectors.news.people_collector import fetch_people_news
-from collectors.news.xinhuanet_collector import fetch_xinhua_news
-from collectors.news.caixin_collector import fetch_caixin_news
+
 #======================
 
 #页面设置
@@ -496,24 +493,45 @@ font-size:12px;
 ">
 🕒 {str(row['date'])}
 | 🌍 {source}
-| <a href="{row['link']}" target="_blank">原文</a>
+| <a href=" 'link']" target="_blank">原文</a >
 </div>
 </div>
                     """,
-                    unsafe_allow_html=True
+                 unsafe_allow_html=True
                 )
 
                 # ----------------------
-                # AI分析折叠（暂不调用 AI，只保留接口）
+                # AI分析折叠
                 # ----------------------
-                with st.expander(f"🤖 AI深度分析 #{source}-{idx+1}"):
-                    st.info("AI分析暂未接入，可在未来直接启用 DeepSeek API")
-                    # 以下为占位结构，未来替换 fake_ai_analysis 即可
-                    # analysis = fake_ai_analysis(row["title"])
-                    # st.info(analysis["summary"])
-                    # st.metric("风险评分", analysis["risk_score"])
-                    # st.write(f"风险等级：{analysis['risk_level']}")
-                    # st.write(f"市场趋势：{analysis['trend']}")
+                with st.expander(
+                    f"🤖 AI深度分析 #{source}-{idx+1}"
+                ):
+
+                    analysis = fake_ai_analysis(
+                        row["title"]
+                    )
+
+                    st.write(
+                        analysis["summary"]
+                    )
+
+                    col_a, col_b = st.columns(2)
+
+                    with col_a:
+                        st.metric(
+                            "风险评分",
+                            analysis["risk_score"]
+                        )
+
+                    with col_b:
+                        st.metric(
+                            "风险等级",
+                            analysis["risk_level"]
+                        )
+
+                    st.info(
+                        f"市场状态：{analysis['trend']}"
+                    )
 # ======================
 # 右侧指标区
 # ======================
