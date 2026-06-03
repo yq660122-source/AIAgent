@@ -493,7 +493,7 @@ font-size:12px;
 ">
 🕒 {str(row['date'])}
 | 🌍 {source}
-| <a href=" 'link']" target="_blank">原文</a >
+| <a href="{row['link']}" target="_blank">原文</a >
 </div>
 </div>
                     """,
