@@ -3,4 +3,4 @@ requests>=2.31.0
 pandas>=2.1.0
 matplotlib>=3.8.0
 feedparser>=6.0.10
-plotly>=9.0.0
+plotly
