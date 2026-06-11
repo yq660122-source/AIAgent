@@ -4,7 +4,6 @@ import plotly.graph_objects as go
 
 from collectors.market.fred_api import get_fred_latest
 
-
 # ======================
 # 页面配置
 # ======================
@@ -16,257 +15,205 @@ st.set_page_config(
 
 st.title("📈 Market Trend Analysis")
 
-
 # ======================
 # 顶部导航
 # ======================
 
-nav_col1, nav_col2, nav_col3 = st.columns(3)
+col1, col2, col3 = st.columns(3)
 
-with nav_col1:
-    st.button("🏠 返回首页", key="home_nav")
+with col1:
+    st.button("🏠 返回首页")
 
-with nav_col2:
-    st.button("🌍 全球风险监控", key="risk_nav")
+with col2:
+    st.button("🌍 全球风险监控")
 
-with nav_col3:
-    st.button("🤖 AI宏观分析", key="ai_nav")
-
+with col3:
+    st.button("🤖 AI宏观分析")
 
 # ======================
-# FRED 市场指标
+# 时间窗口
 # ======================
 
-st.subheader("📊 市场指标")
+window = st.selectbox(
+    "时间窗口",
+    ["7D", "30D", "90D", "ALL"],
+    index=2
+)
 
-FRED_SERIES = {
-
-    "S&P 500": "SP500",
-
-    "US 10Y Treasury (%)": "DGS10",
-
-    "黄金 (USD/oz)": "GOLDAMGBD228NLBM",
-
-    "WTI 原油 (USD/barrel)": "DCOILWTICO",
-
-    "USD/CNY": "DEXCHUS"
-
+window_map = {
+    "7D": 7,
+    "30D": 30,
+    "90D": 90,
+    "ALL": None
 }
 
-indicator_data = []
-
-history_dict = {}
-
-
-for name, series_id in FRED_SERIES.items():
-
-    try:
-
-        date, value, history, fetch_time = get_fred_latest(series_id)
-
-        if value is not None:
-
-            indicator_data.append({
-
-                "指标": name,
-
-                "最新值": value,
-
-                "数据日期": date,
-
-                "抓取时间": fetch_time
-
-            })
-
-            history_dict[name] = history
-
-        else:
-
-            st.warning(f"{name} 数据获取失败")
-
-    except Exception as e:
-
-        st.warning(f"{name} 获取失败: {e}")
-
+days = window_map[window]
 
 # ======================
-# 指标展示
+# 数据源
+# ======================
+
+FRED_SERIES = {
+    "S&P 500": "SP500",
+    "US 10Y": "DGS10",
+    "Gold": "GOLDAMGBD228NLBM",
+    "Oil": "DCOILWTICO",
+    "USD/CNY": "DEXCHUS"
+}
+
+history_dict = {}
+indicator_data = []
+
+for name, sid in FRED_SERIES.items():
+    try:
+        date, value, history, fetch_time = get_fred_latest(sid)
+
+        if value is None:
+            continue
+
+        indicator_data.append({
+            "name": name,
+            "value": value,
+            "date": date,
+            "time": fetch_time
+        })
+
+        history_dict[name] = history
+
+    except Exception as e:
+        st.warning(f"{name} error: {e}")
+
+# ======================
+# 指标卡片
 # ======================
 
 if indicator_data:
+    cols = st.columns(len(indicator_data))
 
-    metric_cols = st.columns(len(indicator_data))
+    for i, item in enumerate(indicator_data):
 
-    for idx, row in enumerate(indicator_data):
+        hist = history_dict[item["name"]]
 
-        hist = history_dict.get(row["指标"], [])
+        delta = None
 
-        if hist and len(hist) > 1:
-
+        if hist and len(hist) > 2:
             try:
-
-                start_value = hist[0][1]
-                end_value = hist[-1][1]
-
-                change = (
-                    (end_value - start_value)
-                    / start_value
-                ) * 100
-
-                metric_cols[idx].metric(
-
-                    label=row["指标"],
-
-                    value=f"{row['最新值']:.2f}",
-
-                    delta=f"{change:.2f}%"
-
-                )
-
+                start = float(hist[0][1])
+                end = float(hist[-1][1])
+                delta = f"{((end-start)/start)*100:.2f}%"
             except:
+                pass
 
-                metric_cols[idx].metric(
-
-                    label=row["指标"],
-
-                    value=f"{row['最新值']:.2f}"
-
-                )
-
-        else:
-
-            metric_cols[idx].metric(
-
-                label=row["指标"],
-
-                value=f"{row['最新值']:.2f}"
-
-            )
-
-        metric_cols[idx].caption(
-
-            f"数据日期：{row['数据日期']}\n"
-            f"抓取时间：{row['抓取时间']}"
-
+        cols[i].metric(
+            item["name"],
+            f"{item['value']:.2f}",
+            delta
         )
 
+        cols[i].caption(item["date"])
+
 else:
-
-    st.info("暂无市场指标数据")
-
+    st.info("No data")
 
 # ======================
-# 单指标趋势图（Normalized）
+# 🔥 核心修复：Overview（正确金融画法）
 # ======================
 
-st.subheader("📈 单指标趋势图（Normalized）")
+st.subheader("🌐 Overview (True Market Comparison)")
 
-st.caption(
-    "所有资产以起始点 = 100 进行归一化，方便比较真实走势"
-)
+fig = go.Figure()
 
 for name, hist in history_dict.items():
 
-    if hist:
+    if not hist:
+        continue
 
-        try:
+    df = pd.DataFrame(hist, columns=["Date", "Value"])
 
-            df = pd.DataFrame(
+    df["Date"] = pd.to_datetime(df["Date"])
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+    df = df.dropna().sort_values("Date")
 
-                hist,
+    # 时间窗口（只截数据，不做resample）
+    if days:
+        df = df.tail(days)
 
-                columns=["Date", "Value"]
+    if len(df) < 2:
+        continue
 
-            )
+    # ❗关键：只用真实观测点，不插值、不对齐
+    base = df["Value"].iloc[0]
 
-            df["Date"] = pd.to_datetime(df["Date"])
+    if base == 0:
+        continue
 
-            # ======================
-            # 数据清洗
-            # ======================
+    df["Normalized"] = df["Value"] / base * 100
 
-            df["Value"] = pd.to_numeric(
+    fig.add_trace(
+        go.Scatter(
+            x=df["Date"],
+            y=df["Normalized"],
+            mode="lines",
+            name=name
+        )
+    )
 
-                df["Value"],
+fig.add_hline(y=100, line_dash="dash")
 
-                errors="coerce"
+fig.update_layout(
+    height=600,
+    hovermode="x unified",
+    title=f"Cross Asset Performance ({window})",
+    xaxis_title="Date",
+    yaxis_title="Normalized (Base=100)"
+)
 
-            )
+st.plotly_chart(fig, use_container_width=True)
 
-            df = df.dropna()
+# ======================
+# Individual charts（原始值）
+# ======================
 
-            if len(df) < 2:
+st.subheader("📈 Individual Assets")
 
-                continue
+for name, hist in history_dict.items():
 
-            # ======================
-            # Normalized 处理
-            # ======================
+    if not hist:
+        continue
 
-            base_value = df["Value"].iloc[0]
+    df = pd.DataFrame(hist, columns=["Date", "Value"])
 
-            if base_value == 0:
+    df["Date"] = pd.to_datetime(df["Date"])
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
 
-                continue
+    df = df.dropna().sort_values("Date")
 
-            df["Normalized"] = (
+    if days:
+        df = df.tail(days)
 
-                df["Value"] / base_value
+    if len(df) < 2:
+        continue
 
-            ) * 100
+    start = df["Value"].iloc[0]
+    end = df["Value"].iloc[-1]
 
-            # ======================
-            # Plotly 图表
-            # ======================
+    change = ((end - start) / start) * 100
 
-            fig = go.Figure()
+    fig = go.Figure()
 
-            fig.add_trace(
+    fig.add_trace(
+        go.Scatter(
+            x=df["Date"],
+            y=df["Value"],
+            mode="lines",
+            name=name
+        )
+    )
 
-                go.Scatter(
+    fig.update_layout(
+        title=f"{name} | {change:.2f}%",
+        height=450,
+        hovermode="x unified"
+    )
 
-                    x=df["Date"],
-
-                    y=df["Normalized"],
-
-                    mode="lines",
-
-                    name=name
-
-                )
-
-            )
-
-            fig.update_layout(
-
-                title=f"{name}（Normalized）",
-
-                xaxis_title="日期",
-
-                yaxis_title="Normalized Index",
-
-                hovermode="x unified",
-
-                height=400,
-
-                yaxis=dict(
-
-                    autorange=True,
-
-                    fixedrange=False
-
-                )
-
-            )
-
-            st.plotly_chart(
-
-                fig,
-
-                use_container_width=True
-
-            )
-
-        except Exception as e:
-
-            st.warning(f"{name} 图表生成失败: {e}")
+    st.plotly_chart(fig, use_container_width=True)

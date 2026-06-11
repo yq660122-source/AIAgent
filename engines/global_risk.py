@@ -1,84 +1,45 @@
-def calculate_global_risk(news):
+def calculate_risk_structure(news):
 
     risk_scores = {
-
-        "通胀风险": 0,
-
-        "利率风险": 0,
-
-        "流动性风险": 0,
-
-        "地缘政治风险": 0,
-
-        "市场波动": 0
+        "INFLATION": 0,
+        "RATE": 0,
+        "LIQUIDITY": 0,
+        "GEOPOLITICS": 0,
+        "VOLATILITY": 0
     }
 
     for item in news:
 
         title = item["title"].lower()
 
-        # ======================
-        # 通胀
-        # ======================
-
         if "inflation" in title:
+            risk_scores["INFLATION"] += 1
 
-            risk_scores["通胀风险"] += 2
+        if "rate" in title or "fed" in title or "ecb" in title:
+            risk_scores["RATE"] += 1
 
-        # ======================
-        # 利率
-        # ======================
+        if "liquidity" in title or "funding" in title:
+            risk_scores["LIQUIDITY"] += 1
 
-        if (
+        if "war" in title or "conflict" in title:
+            risk_scores["GEOPOLITICS"] += 1
 
-            "rate" in title
-
-            or "fed" in title
-
-            or "ecb" in title
-        ):
-
-            risk_scores["利率风险"] += 2
-
-        # ======================
-        # 流动性
-        # ======================
-
-        if (
-
-            "liquidity" in title
-
-            or "funding" in title
-        ):
-
-            risk_scores["流动性风险"] += 2
-
-        # ======================
-        # 地缘政治
-        # ======================
-
-        if (
-
-            "war" in title
-
-            or "conflict" in title
-
-            or "military" in title
-        ):
-
-            risk_scores["地缘政治风险"] += 3
-
-        # ======================
-        # 波动
-        # ======================
-
-        if (
-
-            "volatility" in title
-
-            or "uncertainty" in title
-        ):
-
-            risk_scores["市场波动"] += 2
+        if "volatility" in title or "uncertainty" in title:
+            risk_scores["VOLATILITY"] += 1
 
     return risk_scores
+
+
+# （保留你原来的函数，如果还在用）
+def calculate_global_risk(news_scores, market_stress=0, rate_stress=0):
+
+    if not news_scores:
+        return 0
+
+    news_risk = sum(news_scores) / len(news_scores)
+
+    structural = (market_stress * 0.5 + rate_stress * 0.5)
+
+    final = (news_risk * 0.5 + structural * 0.5)
+
+    return min(round(final, 2), 100)

@@ -4,3 +4,4 @@ pandas
 matplotlib
 feedparser
 plotly
+beautifulsoup4

@@ -21,14 +21,13 @@ from utils.translator import (
 from engines.news_tagging import (
     tag_news
 )
-from engines.global_risk import (
-    calculate_global_risk
-)
 from engines.risk_engine import (
     calculate_risk_score,
     get_risk_level
 )
 
+from utils.risk_ui import render_risk_ball
+from engines.risk_ball import compute_risk_ball
 #======================
 
 #页面设置
@@ -125,41 +124,55 @@ if st.button("🔄 刷新数据"):
 
   st.success("缓存已清空，重新加载最新数据")
 
-#======================
 
-#新闻数据
+# ======================
+# 新闻数据（修改）
+# ======================
 
-#======================
-
+# 统一变量 news
 if "all_news" not in st.session_state:
+    news = []
+    news += fetch_fed_news()
+    news += fetch_ecb_news()
 
-  news = []  
+    # 时间排序
+    news.sort(key=lambda x: x["date"], reverse=True)
 
-  news += fetch_fed_news()  
-
-  news += fetch_ecb_news()  
-
-# 时间排序  
-  news.sort(  
-    key=lambda x: x["date"],  
-    reverse=True  
-)  
-
-  st.session_state["all_news"] = news
+    st.session_state["all_news"] = news
 else:
+    news = st.session_state["all_news"]
 
-  news = st.session_state["all_news"]
-
-news_df = pd.DataFrame(news)
 # ======================
-# 全球风险统计
+# 风险球计算（修改）
 # ======================
+#调试
+st.write("DEBUG START")
+st.write(news)
+# 使用 compute_risk_ball
+risk_result = compute_risk_ball(news)
 
-global_risk = calculate_global_risk(
-    news
-)
+global_risk = risk_result["score"]          # float
+risk_structure = risk_result["structure"]   # dict
+#调试
+for item in news:
+    score = calculate_risk_score(item["title"], item.get("tags", []))
+    st.write(item["title"], "->", score)
+# ======================
+# 风险球 UI（修改）
+# ======================
+st.write("新闻条数：", len(news))#调试行
+st.subheader("🌐 Risk Ball")
 
+# 动态球显示
+render_risk_ball(global_risk)
 
+# 数值显示
+st.metric("Global Risk Score", f"{global_risk:.0f}")
+
+# breakdown 显示
+with st.expander("📊 Risk Breakdown"):
+    for k, v in risk_structure.items():
+        st.write(f"{k}: {v}")
 #======================
 
 # 指标数据
@@ -304,41 +317,11 @@ st.success(
 """
 )
 
-# ======================
-# 全球风险面板
-# ======================
 
-st.subheader("🌍 GLOBAL RISK DASHBOARD")
 
-risk_cols = st.columns(5)
 
-risk_items = list(global_risk.items())
 
-for idx, (risk_name, score) in enumerate(risk_items):
 
-    if score >= 6:
-
-        level = "🔴 HIGH"
-
-    elif score >= 3:
-
-        level = "🟠 MEDIUM"
-
-    else:
-
-        level = "🟢 LOW"
-
-    with risk_cols[idx]:
-
-        st.metric(
-
-            label=risk_name,
-
-            value=level,
-
-            delta=f"Score: {score}"
-
-        )
 
 # ======================
 # 新闻抓取
@@ -408,43 +391,46 @@ for c in grouped_news:
     if c not in ordered_grouped_news:
 
         ordered_grouped_news[c] = grouped_news[c]
+
+
 # ======================
-# 页面布局
+# ======================
+# 页面布局（新闻 + 指标）保持不变
 # ======================
 col1, col2 = st.columns([3, 1])
 
 with col1:
     st.subheader("📰 GLOBAL FINANCIAL NEWS")
+    # 遍历各分组新闻（保持原有逻辑）
+    from collections import OrderedDict
 
-    # ======================
-    # 遍历各分组新闻
-    # ======================
+    country_order = ["CN", "US", "EU", "UK", "JP", "Global"]
+    grouped_news = {}
+    for item in news:
+        country = item.get("country", "Global")
+        if country not in grouped_news:
+            grouped_news[country] = []
+        grouped_news[country].append(item)
+
+    ordered_grouped_news = OrderedDict()
+    for c in country_order:
+        if c in grouped_news:
+            ordered_grouped_news[c] = grouped_news[c]
+    for c in grouped_news:
+        if c not in ordered_grouped_news:
+            ordered_grouped_news[c] = grouped_news[c]
+
+    # 新闻渲染逻辑保持原样
     for source, items in ordered_grouped_news.items():
         st.markdown(f"## 🌍 {source}")
-
         news_container = st.container()
         with news_container:
             for idx, row in enumerate(items):
-                # ----------------------
-                # 标题翻译
-                # ----------------------
-
                 title_data = translate_title(row["title"])
-
-                # ----------------------
-                # 风险标签
-                # ----------------------
                 tag_data = tag_news(row["title"])
-
-                # ----------------------
-                # 风险评分（Rule-based）
-                # ----------------------
                 risk_score = calculate_risk_score(row["title"], tag_data.get("tags", []))
                 risk_level = get_risk_level(risk_score)
 
-                # ----------------------
-                # 趋势判断（兼容旧系统）
-                # ----------------------
                 if risk_score >= 80:
                     trend = "RISK OFF"
                 elif risk_score >= 50:
@@ -452,137 +438,50 @@ with col1:
                 else:
                     trend = "NEUTRAL"
 
-                # ----------------------
-                # 新闻条目显示
-                # ----------------------
-                st.markdown(
-                    f"""
-<div style="
-padding:8px;
-border:1px solid #333;
-border-radius:6px;
-margin-bottom:8px;
-">
-<div style="
-color:{tag_data.get('color','#000')};
-font-weight:bold;
-font-size:13px;
-margin-bottom:4px;
-">
-{tag_data.get('icon','')}
-{tag_data.get('tag','未分类')}
-| Risk Score: {risk_score}
-| Level: {risk_level}
+                st.markdown(f"""
+<div style="padding:8px;border:1px solid #333;border-radius:6px;margin-bottom:8px;">
+<div style="color:{tag_data.get('color','#000')};font-weight:bold;font-size:13px;margin-bottom:4px;">
+{tag_data.get('icon','')}{tag_data.get('tag','未分类')} | Risk Score: {risk_score} | Level: {risk_level}
 </div>
-<div style="
-font-size:15px;
-font-weight:600;
-margin-bottom:4px;
-">
+<div style="font-size:15px;font-weight:600;margin-bottom:4px;">
 {title_data['original']}
 </div>
-<div style="
-color:#AAA;
-font-size:13px;
-">
+<div style="color:#AAA;font-size:13px;">
 【中】{title_data['translated']}
 </div>
-<div style="
-color:#888;
-font-size:12px;
-">
-🕒 {str(row['date'])}
-| 🌍 {source}
-| <a href="{row['link']}" target="_blank">原文</a >
+<div style="color:#888;font-size:12px;">
+🕒 {str(row['date'])} | 🌍 {source} | <a href="{row['link']}" target="_blank">原文</a>
 </div>
 </div>
-                    """,
-                 unsafe_allow_html=True
-                )
+""", unsafe_allow_html=True)
 
-                # ----------------------
-                # AI分析折叠
-                # ----------------------
-                with st.expander(
-                    f"🤖 AI深度分析 #{source}-{idx+1}"
-                ):
-
-                    analysis = fake_ai_analysis(
-                        row["title"]
-                    )
-
-                    st.write(
-                        analysis["summary"]
-                    )
-
+                with st.expander(f"🤖 AI深度分析 #{source}-{idx+1}"):
+                    analysis = fake_ai_analysis(row["title"])
+                    st.write(analysis["summary"])
                     col_a, col_b = st.columns(2)
-
                     with col_a:
-                        st.metric(
-                            "风险评分",
-                            analysis["risk_score"]
-                        )
-
+                        st.metric("风险评分", analysis["risk_score"])
                     with col_b:
-                        st.metric(
-                            "风险等级",
-                            analysis["risk_level"]
-                        )
+                        st.metric("风险等级", analysis["risk_level"])
+                    st.info(f"市场状态：{analysis['trend']}")
 
-                    st.info(
-                        f"市场状态：{analysis['trend']}"
-                    )
-# ======================
-# 右侧指标区
-# ======================
 with col2:
-
-    # ======================
-    # 实时市场
-    # ======================
     st.subheader("⚡ 实时市场")
     for item in realtime_data:
-        st.metric(
-            label=item["name"],
-            value=f"{item['price']:.2f}",
-            delta=item["change_percent"]
-        )
+        st.metric(label=item["name"], value=f"{item['price']:.2f}", delta=item["change_percent"])
 
     st.markdown("---")
-
-    # ======================
-    # 市场指标
-    # ======================
     st.subheader("📊 市场指标")
-
     if not indicator_df.empty:
-
         for idx, row in indicator_df.iterrows():
             hist = history_dict.get(row["指标"], [])
             if hist and len(hist) > 1:
-                change = ((hist[-1][1] - hist[0][1]) / hist[0][1]) * 100
-                st.metric(
-                    label=row["指标"],
-                    value=f"{row['最新值']:.2f}",
-                    delta=f"{change:.2f}%"
-                )
+                change = ((hist[-1][1]-hist[0][1])/hist[0][1])*100
+                st.metric(label=row["指标"], value=f"{row['最新值']:.2f}", delta=f"{change:.2f}%")
             else:
-                st.metric(
-                    label=row["指标"],
-                    value=f"{row['最新值']:.2f}"
-                )
-
-            st.caption(
-                f"""
-数据日期：
-{row['数据日期']}
-
-抓取时间：
-{row['抓取时间']}
-"""
-            )
+                st.metric(label=row["指标"], value=f"{row['最新值']:.2f}")
+            st.caption(f"数据日期：{row['数据日期']}\n抓取时间：{row['抓取时间']}")
             st.markdown("---")
-
     else:
         st.write("暂无指标数据")
 
